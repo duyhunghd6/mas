@@ -1,37 +1,45 @@
 ---
 id: tutorial:mas:agile-dev-agent-team
-description: Hướng dẫn xây dựng Agile Dev Agent Team bằng Claude Code — đội 7 agent thực hiện sprint để xây bộ MAS Chat Bot.
+description: Hướng dẫn xây dựng Agile Dev Agent Team bằng Claude Code — đội 7 agent chạy sprint để phát triển một dự án MAS bất kỳ.
 ---
 
-# TUTORIAL: Agile Dev Agent Team — Xây MAS Chat Bot theo Sprint
+# TUTORIAL: Agile Dev Agent Team — Phát Triển Dự Án MAS
 
 > **MAS = Phần mềm (Agile Dev) + Mô phỏng Nghiệp vụ (Org Simulation)**
 >
-> Tutorial này là mặt **Agile Dev** của MAS — dạy cách *xây phần mềm* bằng một đội
-> agent 7 người, thay vì code thủ công.
+> Tutorial này dạy mặt **Agile Dev** của MAS — cách tổ chức đội 7 agent
+> Claude Code để phát triển phần mềm theo sprint, tuân thủ ground-truth
+> từ `GEMINI.md` và cấu trúc `docs/` của dự án.
 >
-> 📄 Xem mặt nghiệp vụ tại: [CHATBOT-TUTORIAL.md](./CHATBOT-TUTORIAL.md)
+> 🔗 Xem ví dụ nghiệp vụ tại: [CHATBOT-TUTORIAL.md](./CHATBOT-TUTORIAL.md)
+> _(CHATBOT-TUTORIAL là một Org Simulation — pipeline chạy lúc production,
+> không phải quy trình xây phần mềm.)_
 
 ---
 
 ## 1. Bài Toán
 
-Ta cần **xây bộ code MAS Chat Bot** (đã thiết kế ở CHATBOT-TUTORIAL):
+Ta cần **phát triển một dự án MAS** (Multi-Agent System) bằng Claude Code,
+với yêu cầu:
+
+- Toàn bộ quá trình phát triển đều do Agent Team thực hiện.
+- Agents **PHẢI** đọc `GEMINI.md` (hoặc `CLAUDE.md`) trước khi làm bất cứ điều gì.
+- Cấu trúc `docs/` và tech stack trong đó là **ground-truth** — không được tự đặt ra quy tắc riêng.
+- Tất cả tài liệu, test plan, PRD đều nằm trong `docs/` theo đúng chuẩn dự án.
 
 ```
-KẾT QUẢ CẦN GIAO:
-  - .claude/agents/analyzer.md      ← Agent phân tích câu hỏi
-  - .claude/agents/librarian.md     ← Agent tìm kho tài liệu
-  - .claude/agents/validator.md     ← Agent kiểm tra chéo
-  - .claude/skills/chat/SKILL.md    ← /chat pipeline orchestrator
-  - tools/browse_knowledge.py       ← CDP browser tool
-  - docs/knowledge/                 ← Kho tài liệu mẫu (faq, policy)
-  - .claude/settings.json           ← Hooks config (session logging)
-  - scripts/log-session.sh          ← Hook script
-  - docs/tests/test-plan.md         ← Bộ test cases
-```
+GROUND-TRUTH HIERARCHY (bắt buộc đọc trước khi sprint bắt đầu):
 
-Yêu cầu: **Không một người nào tự code thủ công.** Toàn bộ do Agent Team thực hiện.
+  GEMINI.md (hoặc CLAUDE.md)
+    └─ docs/PRD/         ← Product Requirement Documents
+    └─ docs/report/      ← Analysis & status reports
+    └─ docs/tests/       ← Test plans & QA verification docs
+    └─ docs/researches/  ← Spikes và technical research
+    └─ logs/iteration/   ← Execution logs per iteration run
+    └─ memory/           ← Agent state & orchestrator memory
+    └─ .agents/rules/    ← Agent identity, git, universal ID rules
+    └─ .agents/workflows/← Executable AI workflows (RFT, verify)
+```
 
 ---
 
@@ -43,11 +51,11 @@ Yêu cầu: **Không một người nào tự code thủ công.** Toàn bộ do 
 │                                                                  │
 │  ┌─────────────────────┐       ┌──────────────────────────────┐  │
 │  │   PHẦN MỀM          │       │  MÔ PHỎNG NGHIỆP VỤ          │  │
-│  │   (Agile Dev)       │  +   │  (Org Simulation)            │  │
+│  │   (Agile Dev)       │  +    │  (Org Simulation)            │  │
 │  │                     │       │                              │  │
-│  │ - Agent code files  │       │ - 7 vai trò Agile            │  │
-│  │ - Sprint workflow   │       │ - SM điều phối               │  │
-│  │ - Test plan & QA    │       │ - Bug-fix loop tự động       │  │
+│  │ - Đội 7 agent       │       │ - Vai trò Agile cụ thể       │  │
+│  │ - Sprint workflow   │       │ - SM không code              │  │
+│  │ - docs/ là SSOT     │       │ - Bug-fix loop tự động       │  │
 │  └─────────────────────┘       └──────────────────────────────┘  │
 │                                                                  │
 │  Công cụ: Claude Code + CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1  │
@@ -62,28 +70,20 @@ Yêu cầu: **Không một người nào tự code thủ công.** Toàn bộ do 
 ┌──────────────────────────────────────────────────────────────────┐
 │                        ĐỘI HÌNH 7 AGENT                          │
 │                                                                  │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                          │
-│  │   SM    │  │  ARCH   │  │   QA1   │                          │
-│  │         │  │         │  │         │                          │
-│  │ Scrum   │  │ Phân    │  │ Viết    │                          │
-│  │ Master  │  │ tích KT │  │ test    │                          │
-│  │ Điều   │  │ Thiết   │  │ plan    │                          │
-│  │ phối   │  │ kế file │  │ (không  │                          │
-│  │ sprint  │  │ ownership│  │ chạy)   │                          │
-│  └────┬────┘  └─────────┘  └─────────┘                          │
-│       │                                                          │
-│       │  Spawn & điều phối                                        │
-│       │                                                          │
-│  ┌────┴───────────────────────────────────────┐                  │
-│  │                                            │                  │
-│  ▼            ▼             ▼                 ▼                  │
-│ ┌──────┐  ┌──────┐  ┌──────┐            ┌──────┐                │
-│ │ Dev1 │  │ Dev2 │  │ Dev3 │            │ QA2  │                │
-│ │      │  │      │  │      │            │      │                │
-│ │Agent │  │Tools │  │Docs  │            │ Chạy │                │
-│ │files │  │& Sk- │  │& Se- │            │ test,│                │
-│ │      │  │ills  │  │ttings│            │ báo  │                │
-│ └──────┘  └──────┘  └──────┘            └──────┘                │
+│        ┌─────────┐                                               │
+│        │   SM    │  ← Scrum Master, điều phối, KHÔNG code        │
+│        └────┬────┘                                               │
+│             │ spawn tất cả                                        │
+│    ┌────────┼────────┐                                           │
+│    ▼        ▼        ▼                                           │
+│ ┌──────┐ ┌──────┐ ┌──────┐                                       │
+│ │ ARCH │ │ QA1  │ │ Dev* │  ← ARCH + QA1: không code            │
+│ │      │ │      │ │      │  ← Dev1-3: code + unit test          │
+│ └──────┘ └──────┘ └──┬───┘                                       │
+│                       │ sau khi code xong                        │
+│                    ┌──▼───┐                                      │
+│                    │ QA2  │  ← Chạy tests, báo cáo, KHÔNG code  │
+│                    └──────┘                                      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,74 +91,74 @@ Yêu cầu: **Không một người nào tự code thủ công.** Toàn bộ do 
 
 | Agent | Vai trò | Viết code? | Output |
 |:------|:--------|:----------:|:-------|
-| **SM** | Scrum Master, điều phối sprint, không code | ❌ | Sprint board, tin nhắn điều phối |
-| **ARCH** | Thiết kế file ownership, integration points | ❌ | `docs/planning/architecture-decisions.md` |
-| **QA1** | Viết test plan từ DoD | ❌ | `docs/tests/test-plan.md` |
-| **Dev1** | Agent files (analyzer, librarian, validator) | ✅ | `.claude/agents/*.md` |
-| **Dev2** | Tools & skills (browse_knowledge, /chat skill) | ✅ | `tools/`, `.claude/skills/` |
-| **Dev3** | Docs, settings, hooks | ✅ | `docs/knowledge/`, `.claude/settings.json`, `scripts/` |
-| **QA2** | Chạy test plan, báo PASS/FAIL | ❌ | `docs/planning/qa-report.md` |
+| **SM** | Scrum Master, điều phối sprint, phê duyệt test plan | ❌ | Sprint board, tin nhắn broadcast |
+| **ARCH** | Đọc GEMINI.md + docs/, thiết kế file ownership & integration | ❌ | `docs/report/architecture-decisions.md` |
+| **QA1** | Đọc ARCH output + PRD/DoD, viết test plan | ❌ | `docs/tests/test-plan.md` |
+| **Dev1** | Implement feature/module được SM giao (T1) | ✅ | Source files T1 |
+| **Dev2** | Implement feature/module được SM giao (T2) | ✅ | Source files T2 |
+| **Dev3** | Implement feature/module được SM giao (T3) | ✅ | Source files T3 |
+| **QA2** | Chạy test plan, viết qa-report, KHÔNG fix | ❌ | `docs/report/qa-report.md` |
+
+> **Quy tắc phân chia Dev:** Không hai Dev nào cùng sở hữu một file
+> tại cùng một thời điểm (tránh conflict). ARCH quyết định file ownership.
 
 ---
 
 ## 4. Sprint Pipeline
 
 ```
-  START: User paste prompt vào Claude Code
+  START: Paste prompt vào Claude Code
          │
          ▼
-  ┌─────────────┐
-  │     SM      │  Bước 0: Đọc GEMINI.md + task source
-  │             │  Spawn 6 teammates cùng lúc
-  │  "Khai      │  Giao task theo dependency graph
-  │   mạc       │
-  │   sprint"   │
-  └──────┬──────┘
+  ┌──────────────┐
+  │     SM       │  Bước 0: Đọc GEMINI.md + docs/PRD/ + task source
+  │              │  Spawn 6 teammates cùng lúc
+  │  "Khai mạc   │  Giao task T1/T2/T3 theo dependency graph
+  │   sprint"    │
+  └──────┬───────┘
          │ spawn all
          ▼
-  ┌─────────────┐
-  │    ARCH     │  Bước 1: Đọc codebase + thiết kế
-  │             │  → Ai touch file nào?
-  │  "Phân      │  → Integration points
-  │   tích      │  Output: architecture-decisions.md
-  │   KT"       │
-  └──────┬──────┘
-         │ "ARCH done"
-         ▼
-  ┌─────────────┐
-  │    QA1      │  Bước 2: Đọc ARCH output + DoD
-  │             │  Viết test case cho mỗi tiêu chí
-  │  "Viết      │  Output: test-plan.md
-  │   test      │  Nhắn SM: "QA1 done"
-  │   plan"     │
-  └──────┬──────┘
-         │ SM phê duyệt tức thì "APPROVED ✅"
-         ▼
-  ┌──────────────────────────────────┐
-  │   Dev1  │  Dev2  │  Dev3        │  Bước 3: Song song
-  │  agents │  tools │  docs+cfg    │  Mỗi Dev: đọc arch-decisions
-  │  files  │  skill │  settings    │  → code → unit test → done
-  └────┬────┴────┬───┴────┬─────────┘
-       │         │        │
-       └────┬────┴────────┘
-            │ "DevN done"
-            ▼
-  ┌─────────────┐
-  │    QA2      │  Bước 4: Chạy test plan
-  │             │  Output: qa-report.md
-  │  "Chạy      │  Nhắn SM: "N passed / M failed"
-  │   tests"    │
-  └──────┬──────┘
+  ┌──────────────┐
+  │    ARCH      │  Bước 1: Đọc GEMINI.md, docs/, source files
+  │              │  Thiết kế: ai touch file nào, integration points
+  │  "Phân tích  │  Output → docs/report/architecture-decisions.md
+  │   & thiết kế"│  Nhắn SM: "ARCH done"
+  └──────┬───────┘
          │
-    ┌────┴────┐
-    ▼         ▼
-┌───────┐ ┌──────────┐
-│ PASS  │ │  FAIL    │  Bước 5: Bug-fix loop
-│ 100%  │ │          │  SM re-spawn Dev bị lỗi
-└───┬───┘ │ SM       │  Dev fix → SM re-spawn QA2
-    │     │ re-spawn │  Lặp đến khi zero failures
-    │     │ Dev+QA2  │
-    ▼     └──────────┘
+         ▼
+  ┌──────────────┐
+  │    QA1       │  Bước 2: Đọc GEMINI.md + ARCH output + PRD DoD
+  │              │  Viết test case cụ thể (command, assertion, pass/fail)
+  │  "Viết test  │  Output → docs/tests/test-plan.md
+  │   plan"      │  Nhắn SM: "QA1 done"
+  └──────┬───────┘
+         │ SM reply "APPROVED ✅" tức thì
+         ▼
+  ┌────────────────────────────────┐
+  │  Dev1   │   Dev2   │   Dev3   │  Bước 3: Song song
+  │  [T1]   │   [T2]   │   [T3]   │  Đọc GEMINI.md + arch-decisions.md
+  │  file   │   file   │   file   │  Code → unit test → nhắn SM
+  │  set 1  │   set 2  │   set 3  │
+  └────┬────┴────┬──────┴────┬────┘
+       └─────────┴───────────┘
+                 │ "DevN done"
+                 ▼
+  ┌──────────────┐
+  │    QA2       │  Bước 4: Chạy test-plan.md
+  │              │  Output → docs/report/qa-report.md
+  │  "Chạy       │  Nhắn SM: "N passed / M failed"
+  │   tests"     │
+  └──────┬───────┘
+         │
+    ┌────┴─────┐
+    ▼          ▼
+┌───────┐  ┌──────────────────────────────────┐
+│ PASS  │  │  FAIL                            │
+│ 100%  │  │  SM re-spawn Dev bị lỗi          │
+└───┬───┘  │  Dev fix → nhắn SM               │
+    │       │  SM re-spawn QA2 với case lỗi    │
+    │       │  Lặp đến khi zero failures       │
+    ▼       └──────────────────────────────────┘
  Sprint DONE ✅
 ```
 
@@ -166,178 +166,160 @@ Yêu cầu: **Không một người nào tự code thủ công.** Toàn bộ do 
 
 ## 5. Giao Tiếp Giữa Các Agent
 
-### Model: Agent Team Messaging (Claude Code Native)
-
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │              AGENT TEAM COMMUNICATION MODEL                     │
 │                                                                │
-│  SM ──broadcast──→ Dev1, Dev2, Dev3: "Begin implementation"    │
+│  SM ─broadcast─→ Dev1, Dev2, Dev3: "Test plan approved.        │
+│                                     Begin implementation."     │
 │                                                                │
-│  Dev1 ──message──→ SM: "Dev1 done [T1, T3]."                  │
-│  Dev2 ──message──→ SM: "Dev2 done [T2]."                      │
-│  Dev3 ──message──→ SM: "Dev3 done [T4]."                      │
+│  DevN ─message─→ SM: "DevN done [task IDs]."                  │
 │                                                                │
-│  SM ──spawn──→ QA2: "Run test-plan.md cases [list]."          │
-│  QA2 ──message──→ SM: "3 passed / 1 failed. See qa-report."   │
+│  SM ─spawn─→ QA2: "Run test-plan.md cases: [list]."           │
+│  QA2 ─message─→ SM: "3 passed / 1 failed. See qa-report."    │
 │                                                                │
-│  SM ──re-spawn──→ Dev1: "Fix bug: [exact failure]."           │
-│  Dev1 ──message──→ SM: "Fixed. Unit tests pass."              │
-│  SM ──re-spawn──→ QA2: "Re-run failing case [X]."             │
+│  [Bug-fix loop]                                                │
+│  SM ─re-spawn─→ DevN: "Fix bug: [exact QA2 failure]."         │
+│  DevN ─message─→ SM: "Fixed. Unit tests pass."                │
+│  SM ─re-spawn─→ QA2: "Re-run failing case [X] only."          │
 │                                                                │
-│  ✅ Mỗi teammate là process riêng biệt                          │
-│  ✅ File là kênh giao tiếp bền vững (arch-decisions, qa-report) │
-│  ✅ Message là tín hiệu điều phối nội bộ                        │
+│  ✅ File là kênh giao tiếp bền vững:                            │
+│     docs/report/architecture-decisions.md → Devs đọc          │
+│     docs/tests/test-plan.md → QA2 chạy                        │
+│     docs/report/qa-report.md → SM đọc để điều phối            │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### So Sánh: Subagent vs. Agent Team
-
-| Tiêu chí | Subagent (CHATBOT-TUTORIAL) | Agent Team (AGILEDEV-TUTORIAL) |
-|:---------|:--------------------------|:-------------------------------|
-| Dùng khi | Delegate subtask, giữ context | Parallel independent work |
-| Process | Cùng process với main | Process riêng biệt |
-| Giao tiếp | Return value → Orchestrator | message / broadcast |
-| Concurrent | Tuần tự (chaining) | Song song thực sự |
-| Chi phí token | Thấp (chung context) | Cao hơn (mỗi agent = context riêng) |
-| Phù hợp | Runtime Q&A pipeline | Sprint-level software development |
+> **Lưu ý:** Agent Team là các process Claude Code **riêng biệt**, khác với
+> Subagent (cùng process, return-value chaining như trong CHATBOT-TUTORIAL).
+> Dùng Agent Team khi cần song song thực sự; dùng Subagent khi cần delegate
+> subtask trong cùng pipeline.
 
 ---
 
 ## 6. Ready-to-Paste Prompt
 
-Khi đã có `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` trong môi trường,
-copy toàn bộ block dưới đây và paste vào Claude Code:
+Kích hoạt feature flag trước:
+
+```bash
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+```
+
+Sau đó copy block dưới đây và paste vào Claude Code. **Điền vào `[...]`
+các giá trị thực tế của sprint:**
 
 ```
-Create an agent team with 7 teammates to build the MAS QA Chatbot codebase.
+Create an agent team with 7 teammates to implement [SPRINT GOAL / feature description].
 
 Prerequisites:
 - CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 must be set
-- model: sonnet (set in .claude/settings.json or --model flag)
+- model: sonnet
 
-Read before spawning — ground truth for this project:
-- GEMINI.md (or CLAUDE.md) — project rules and conventions
-- README.md — system overview and directory layout
-- example/CHATBOT-TUTORIAL.md — the chatbot design spec (source of truth for what to build)
+Ground truth — every teammate must read these first, before any action:
+- GEMINI.md (or CLAUDE.md) — project rules, directory conventions, agent identity rules
+- docs/PRD/ — Product Requirement Documents and Definition of Done
+- docs/researches/spikes/ — technical spikes and research (verify against source)
+- [path to task source document] — sprint task list, dependency graph, DoD per task
 
-Task breakdown:
-- T1: .claude/agents/analyzer.md, librarian.md, validator.md (Agent subagent files)
-- T2: tools/browse_knowledge.py (CDP browser tool), .claude/skills/chat/SKILL.md (/chat skill)
-- T3: docs/knowledge/ (faq.md, product-info.md, policy.md), .claude/settings.json, scripts/log-session.sh
-- T4: docs/tests/test-plan.md (derived from DoD in CHATBOT-TUTORIAL.md)
+Task breakdown for this sprint:
+- T1: [description] — files: [list of files Dev1 will own]
+- T2: [description] — files: [list of files Dev2 will own]
+- T3: [description] — files: [list of files Dev3 will own]
 
-Dependency order: T4 (QA1, parallel with T1-T3) → T1, T2, T3 (parallel Devs after ARCH) → QA2
+Dependency order: [e.g. T1 → T2, T3 independent]
 
 Spawn the following 7 teammates:
 
 TEAMMATE SM — Scrum Master:
-You are the Scrum Master orchestrating this sprint. Read GEMINI.md and example/CHATBOT-TUTORIAL.md first.
+You are the Scrum Master. Read GEMINI.md and [task source] first. Never write code.
 Spawn these 6 teammates immediately with the prompts below.
-Task assignment: Dev1 → T1, Dev2 → T2, Dev3 → T3.
-When QA1 posts docs/tests/test-plan.md, reply "Test plan APPROVED ✅" immediately and broadcast to Dev1/Dev2/Dev3: "Test plan approved. Begin implementation."
-Run the bug-fix loop: wait for QA2 report → re-spawn failing Dev with exact failure description → after Dev confirms fix, re-spawn QA2 with only the previously failing cases → repeat until zero failures → mark sprint DONE.
-Never write code yourself.
+Assign: Dev1 → T1, Dev2 → T2, Dev3 → T3. Enforce the file ownership from ARCH.
+When QA1 posts docs/tests/test-plan.md, reply "Test plan APPROVED ✅" immediately
+and broadcast to Dev1/Dev2/Dev3: "Test plan approved. Begin implementation."
+Bug-fix loop: wait for QA2 report → re-spawn failing Dev with exact failure text →
+after Dev confirms fix, re-spawn QA2 with only the failing cases → repeat until zero failures → mark DONE.
 
 TEAMMATE ARCH — Software Architect:
-Read GEMINI.md, README.md, example/CHATBOT-TUTORIAL.md, and the existing .claude/ and docs/ structure.
-Produce docs/planning/architecture-decisions.md covering:
-  - File ownership map: Dev1 owns .claude/agents/, Dev2 owns tools/ and .claude/skills/, Dev3 owns docs/knowledge/ and .claude/settings.json and scripts/
-  - Integration points: how /chat SKILL.md calls the 3 agents; how log-session.sh is triggered by hooks
-  - Design constraints from CHATBOT-TUTORIAL.md (golden rules, no hallucination)
-Do not write production code. Message SM when done: "ARCH done. architecture-decisions.md ready."
+Read GEMINI.md, docs/PRD/, docs/researches/, and the relevant source files for this sprint.
+Produce docs/report/architecture-decisions.md covering:
+  - File ownership map (Dev1 owns [files], Dev2 owns [files], Dev3 owns [files])
+  - Integration points between tasks
+  - Design constraints and conventions from GEMINI.md that Devs must follow
+  - Tech stack references from docs/ that apply to this sprint
+Do not write production code. Message SM: "ARCH done. architecture-decisions.md ready."
 
 TEAMMATE QA1 — Planning QA:
-Wait for ARCH to post docs/planning/architecture-decisions.md.
-Read GEMINI.md + ARCH output + the Definition of Done from example/CHATBOT-TUTORIAL.md sections 3-8.
+Wait until ARCH posts docs/report/architecture-decisions.md.
+Read GEMINI.md + ARCH output + DoD from docs/PRD/.
 Write docs/tests/test-plan.md with:
-  - One test case per DoD criterion (agent files exist and have correct YAML frontmatter, /chat skill invokes all 3 agents, Validator rejects hallucinated answers, session log is created after each chat)
-  - Exact commands/assertions (e.g., cat .claude/agents/analyzer.md | grep 'tools:', claude /chat "test question")
+  - One test case per DoD criterion
+  - Exact commands/assertions (CLI, file existence checks, unit test commands)
   - Pass/Fail criteria
 Do not run tests. Message SM: "QA1 done. test-plan.md ready for approval."
 
-TEAMMATE Dev1 — Agent Files:
-Read GEMINI.md, README.md, docs/planning/architecture-decisions.md, and example/CHATBOT-TUTORIAL.md sections 3 and 7 first.
-Wait for SM to say "Begin implementation."
-Own tasks: T1. Files you own: .claude/agents/analyzer.md, .claude/agents/librarian.md, .claude/agents/validator.md
-Write each agent file with correct YAML frontmatter (name, description, tools, model fields).
-Follow all conventions in GEMINI.md. Write a simple smoke test (e.g., cat each file | grep 'tools:') to verify.
-Message SM when done: "Dev1 done [T1]. Agent files ready."
-When re-spawned for a bug fix, read the exact QA2 failure, fix only that, re-run your smoke test, message SM.
+TEAMMATE Dev1:
+Read GEMINI.md, docs/PRD/, docs/report/architecture-decisions.md first. Never start before ARCH posts.
+Wait for SM to broadcast "Begin implementation."
+Own tasks: T1. Files you own: [list]. Do not touch Dev2 or Dev3 files.
+Follow all conventions in GEMINI.md (universal IDs, commit format, tool-writing rules, etc.).
+Write unit tests for your code. Message SM: "Dev1 done [T1]."
+On re-spawn: read the exact QA2 failure, fix only that, re-run unit tests, message SM.
 
-TEAMMATE Dev2 — Tools & Skills:
-Read GEMINI.md, README.md, docs/planning/architecture-decisions.md, and example/CHATBOT-TUTORIAL.md sections 4 and 7 first.
-Wait for SM to say "Begin implementation."
-Own tasks: T2. Files you own: tools/browse_knowledge.py, .claude/skills/chat/SKILL.md
-Write tools/browse_knowledge.py as a CLI tool (argparse, connects to CDP on port 9222 if available).
-Write .claude/skills/chat/SKILL.md as the /chat pipeline orchestrator (invokes Analyzer → Librarian → Validator via subagent return-value chaining).
-Follow tool-writing rules in GEMINI.md. Write a simple import/syntax check: python -c "import tools.browse_knowledge".
-Message SM when done: "Dev2 done [T2]. Tools and skill ready."
-When re-spawned for a bug fix, read the exact QA2 failure, fix only that, re-run your check, message SM.
+TEAMMATE Dev2:
+[Same structure as Dev1 — tasks: T2, files: [list]]
 
-TEAMMATE Dev3 — Docs, Config & Hooks:
-Read GEMINI.md, README.md, docs/planning/architecture-decisions.md, and example/CHATBOT-TUTORIAL.md sections 7-8 first.
-Wait for SM to say "Begin implementation."
-Own tasks: T3. Files you own: docs/knowledge/faq.md, docs/knowledge/product-info.md, docs/knowledge/policy.md, .claude/settings.json, scripts/log-session.sh
-Create sample knowledge docs (faq, product-info, policy) for GSCfin MAS use case.
-Write .claude/settings.json with the Stop hook pointing to scripts/log-session.sh.
-Write scripts/log-session.sh to append session metadata to logs/iteration/{run-id}/session.md.
-Message SM when done: "Dev3 done [T3]. Docs, settings, and scripts ready."
-When re-spawned for a bug fix, read the exact QA2 failure, fix only that, message SM.
+TEAMMATE Dev3:
+[Same structure as Dev1 — tasks: T3, files: [list]]
 
 TEAMMATE QA2 — Test Execution:
-Run these test cases from docs/tests/test-plan.md: [all cases on first spawn / only previously failing cases on re-spawn].
-Write docs/planning/qa-report.md: PASS/FAIL per test case, exact repro steps for any failures.
-Never fix code yourself — only report.
-Message SM: "QA2 done. [N passed / M failed]. See docs/planning/qa-report.md."
-On re-spawn, run only the cases listed by SM, report only those results as a delta.
+Run the test cases listed by SM from docs/tests/test-plan.md.
+Write docs/report/qa-report.md: PASS/FAIL per case, exact repro steps for failures.
+Never fix code. Message SM: "QA2 done. [N passed / M failed]. See docs/report/qa-report.md."
+On re-spawn: run only the previously failing cases; report delta only.
 ```
 
 ---
 
-## 7. Cấu Trúc Thư Mục
+## 7. Cấu Trúc Thư Mục (Theo GEMINI.md)
 
 ```bash
-mas-qa-chatbot/              # Repo gốc
-├── example/
-│   ├── CHATBOT-TUTORIAL.md  # Thiết kế nghiệp vụ (ground truth)
-│   └── AGILEDEV-TUTORIAL.md # File này — hướng dẫn Agile Dev
+mas/                              # Repo gốc
+│
+├── GEMINI.md                     # ← Ground truth: rules + dir structure
+├── CLAUDE.md → GEMINI.md         # ← Symlink cho Claude Code
 │
 ├── docs/
-│   ├── knowledge/           # [Dev3] Kho tài liệu mẫu
-│   │   ├── faq.md
-│   │   ├── product-info.md
-│   │   └── policy.md
-│   ├── tests/
-│   │   └── test-plan.md     # [QA1] Bộ test cases
-│   └── planning/
-│       ├── architecture-decisions.md  # [ARCH]
-│       └── qa-report.md               # [QA2]
-│
-├── tools/
-│   └── browse_knowledge.py  # [Dev2] CDP browser tool
-│
-├── scripts/
-│   └── log-session.sh       # [Dev3] Hook script — log session
+│   ├── PRD/                      # Product Requirement Documents
+│   │   └── [feature].md          # [ARCH + QA1 đọc]
+│   ├── report/                   # Analysis & status reports
+│   │   ├── architecture-decisions.md  # [ARCH viết]
+│   │   └── qa-report.md               # [QA2 viết]
+│   ├── tests/                    # Test plans & QA docs
+│   │   └── test-plan.md          # [QA1 viết, QA2 chạy]
+│   └── researches/
+│       └── spikes/               # Technical research
 │
 ├── logs/
-│   └── iteration/           # Session traces cho RFT
-│       └── {run-id}/session.md
+│   └── iteration/{run-id}/       # Execution logs per sprint
+│       └── session.md
 │
-├── .claude/
-│   ├── settings.json        # [Dev3] Hooks config (Stop → log-session)
-│   ├── agents/
-│   │   ├── analyzer.md      # [Dev1] Agent Analyzer
-│   │   ├── librarian.md     # [Dev1] Agent Librarian
-│   │   └── validator.md     # [Dev1] Agent Validator
-│   └── skills/
-│       └── chat/
-│           └── SKILL.md     # [Dev2] /chat — Pipeline orchestrator
+├── memory/
+│   ├── agents/{subagent}.md      # Agent context & state
+│   ├── task.md                   # Master Orchestrator task list
+│   ├── progress.md               # Sprint progress
+│   └── plan.md                   # Current plan
 │
-└── .agents/
-    └── rules/
-        └── SOUL.md          # Quy tắc văn hoá MAS
+├── .agents/
+│   ├── rules/                    # Agent identity, git rules, Universal IDs
+│   └── workflows/                # claudecode-agent-rft, verify workflows
+│
+└── example/
+    ├── CHATBOT-TUTORIAL.md       # Org Simulation example (nghiệp vụ)
+    └── AGILEDEV-TUTORIAL.md      # File này — Agile Dev how-to
 ```
+
+> **Không có `docs/knowledge/`** — đó là thư mục thuộc về Org Simulation
+> (chatbot kho tài liệu), không thuộc Agile Dev workflow.
 
 ---
 
@@ -347,41 +329,37 @@ mas-qa-chatbot/              # Repo gốc
 ┌────────────────────────────────────────────────────────────────────┐
 │                   TỔNG KẾT AGILE DEV AGENT TEAM                    │
 │                                                                    │
-│  Paste prompt → Claude Code (EXPERIMENTAL_AGENT_TEAMS=1)           │
-│                   │                                                │
-│            SM spawns 6 teammates                                   │
-│                   │                                                │
-│       ARCH ──→ architecture-decisions.md                           │
-│       QA1  ──→ test-plan.md (SM auto-APPROVED ✅)                  │
-│                   │                                                │
-│  Dev1 ──→ agents  │  Dev2 ──→ tools+skill  │  Dev3 ──→ docs+cfg   │
-│  (song song)       (song song)               (song song)          │
-│                   │                                                │
-│              QA2 ──→ qa-report.md                                  │
-│                   │                                                │
-│          Bug-fix loop (SM ↔ Dev ↔ QA2)                            │
-│                   │                                                │
-│            Sprint DONE ✅                                          │
+│  1. Paste prompt vào Claude Code                                   │
+│     (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)                       │
 │                                                                    │
-│  QUAN HỆ VỚI CHATBOT-TUTORIAL:                                     │
-│  - CHATBOT = Org Simulation (3 agent nghiệp vụ chạy production)    │
-│  - AGILEDEV = Phần mềm (7 agent xây code để có 3 agent trên)       │
-│  - Hai tutorial cùng nhau = Một MAS hoàn chỉnh                     │
+│  2. SM đọc GEMINI.md → spawn 6 teammates                           │
 │                                                                    │
-│  MÔ HÌNH NHÂN SỰ:                                                  │
-│  SM → không code  │  ARCH → không code  │  QA1 → không code       │
-│  Dev1,2,3 → code  │  QA2 → không code                             │
+│  3. ARCH đọc docs/ → architecture-decisions.md                     │
+│     QA1 đọc PRD + ARCH → test-plan.md (SM: APPROVED ✅)            │
 │                                                                    │
-│  KÍCH HOẠT: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1                 │
+│  4. Dev1 │ Dev2 │ Dev3 — song song, không conflict file            │
+│     └─── mỗi Dev đọc GEMINI.md + arch-decisions trước             │
+│                                                                    │
+│  5. QA2 chạy test-plan → qa-report                                 │
+│                                                                    │
+│  6. Bug-fix loop: SM ↔ Dev ↔ QA2 cho đến zero failures            │
+│                                                                    │
+│  Sprint DONE ✅                                                     │
+│                                                                    │
+│  PHÂN BIỆT HAI TUTORIAL:                                           │
+│  CHATBOT-TUTORIAL  = Org Simulation (pipeline nghiệp vụ lúc run)   │
+│  AGILEDEV-TUTORIAL = Phần mềm (quy trình xây dự án bằng agents)    │
+│  → Kết hợp cả hai = MAS hoàn chỉnh                                 │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-> **Liên kết:**
-> - Thiết kế nghiệp vụ: [CHATBOT-TUTORIAL.md](./CHATBOT-TUTORIAL.md)
-> - Agent RFT Workflow: `.agents/workflows/claudecode-agent-rft.md`
-> - Skill tham khảo: `.agents/skills/build-with-claude-code/SKILL.md`
+> **Tham khảo:**
+> - Ground truth: [GEMINI.md](../GEMINI.md)
+> - Agent Teams: `.agents/skills/build-with-claude-code/reference/agent-teams.md`
+> - Agile Dev (brownfield): `.agents/skills/build-with-claude-code/agile-agent-team/agile-dev-brown-field.md`
+> - Agent RFT: `.agents/workflows/claudecode-agent-rft.md`
 
 ---
 
