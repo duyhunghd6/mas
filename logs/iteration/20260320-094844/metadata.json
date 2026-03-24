@@ -1,0 +1,6 @@
+{
+  "run_id": "20260320-094844",
+  "session_id": "da37f1a1-1048-46a3-8db3-f87bf78292e2",
+  "timestamp": "2026-03-20T02:48:44Z",
+  "hook_input": {"session_id":"da37f1a1-1048-46a3-8db3-f87bf78292e2","transcript_path":"/Users/steve/.claude/projects/-Users-steve-duyhunghd6-mas/da37f1a1-1048-46a3-8db3-f87bf78292e2.jsonl","cwd":"/Users/steve/duyhunghd6/mas","permission_mode":"bypassPermissions","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"KHÔNG TÌM THẤY THÔNG TIN LIÊN QUAN"}
+}
