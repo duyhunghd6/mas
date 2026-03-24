@@ -4,7 +4,7 @@
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "./scripts/log-session.sh"
+        "command": ".claude/log-session.sh"
       }]
     }]
   }

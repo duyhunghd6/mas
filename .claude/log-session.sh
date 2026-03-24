@@ -22,6 +22,7 @@
 set -euo pipefail
 
 LOGS_DIR="$(cd "$(dirname "$0")/.." && pwd)/logs/iteration"
+# NOTE: .claude/ is one level below project root, so ../ reaches project root correctly.
 RUN_ID=$(date +"%Y%m%d-%H%M%S")
 SESSION_DIR="${LOGS_DIR}/${RUN_ID}"
 
