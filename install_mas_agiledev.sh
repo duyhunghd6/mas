@@ -70,9 +70,13 @@ else
 fi
 echo ""
 
-# ── Step 2: per-skill symlinks inside .claude/skills/ ─────────────────────────
+# ── Step 2: per-skill entries inside .claude/skills/ ─────────────────────────
 # code:tool-install-mas-002:link-skills
-echo "── Step 2: .claude/skills/<SUBDIR> → .agents/skills/<SUBDIR>"
+# Rules:
+#   .agents/skills/<SUBDIR> is a real directory → create symlink in .claude/skills/
+#   .agents/skills/<SUBDIR> is a symlink        → cp -r resolved target into .claude/skills/
+# Always runs, even if .claude/ already exists, to verify/update every skill.
+echo "── Step 2: verify/install .claude/skills/<SUBDIR>"
 
 if [ ! -d "${MAS_SKILLS_SRC}" ]; then
   echo "  ⚠  No .agents/skills/ directory found in MAS — skipping skill links."
@@ -82,28 +86,36 @@ else
 
   SKILL_COUNT=0
   for SKILL_PATH in "${MAS_SKILLS_SRC}"/*/; do
-    [ -e "${SKILL_PATH}" ] || continue          # glob miss
-    SUBDIR="$(basename "${SKILL_PATH}")"
-    DEST_LINK="${SKILLS_DEST}/${SUBDIR}"
+    [ -e "${SKILL_PATH}" ] || continue          # glob miss — skip
+    SUBDIR="$(basename "${SKILL_PATH%/}")"
+    DEST="${SKILLS_DEST}/${SUBDIR}"
 
-    # Force-remove existing (symlink, dir, or file)
-    if [ -L "${DEST_LINK}" ]; then
-      rm "${DEST_LINK}"
-    elif [ -e "${DEST_LINK}" ]; then
-      rm -rf "${DEST_LINK}"
+    # Force-remove existing destination (symlink, dir, or file)
+    if [ -L "${DEST}" ]; then
+      rm "${DEST}"
+    elif [ -e "${DEST}" ]; then
+      rm -rf "${DEST}"
     fi
 
-    # Resolve real path — follow if the skill source is itself a symlink
-    REAL_SKILL="$(cd "${SKILL_PATH}" && pwd -P)"
-    ln -s "${REAL_SKILL}" "${DEST_LINK}"
-    echo "  ✓ ${SUBDIR} → ${REAL_SKILL}"
+    if [ -L "${SKILL_PATH%/}" ]; then
+      # ── Source is a symlink → copy the resolved target directory ──────────
+      REAL_SKILL="$(cd "${SKILL_PATH}" && pwd -P)"
+      cp -r "${REAL_SKILL}" "${DEST}"
+      echo "  📋 ${SUBDIR} (symlink→copy)  ← ${REAL_SKILL}"
+    else
+      # ── Source is a real directory → create a symlink ─────────────────────
+      REAL_SKILL="$(cd "${SKILL_PATH}" && pwd -P)"
+      ln -s "${REAL_SKILL}" "${DEST}"
+      echo "  🔗 ${SUBDIR} (symlink)       → ${REAL_SKILL}"
+    fi
+
     SKILL_COUNT=$((SKILL_COUNT + 1))
   done
 
   if [ "${SKILL_COUNT}" -eq 0 ]; then
     echo "  (no skill subdirectories found in ${MAS_SKILLS_SRC})"
   else
-    echo "  ${SKILL_COUNT} skill(s) linked."
+    echo "  ${SKILL_COUNT} skill(s) installed."
   fi
 fi
 echo ""
