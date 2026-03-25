@@ -2,126 +2,65 @@
 # install_mas_agiledev.sh
 # code:tool-install-mas-001:create-symlink
 #
-# MAS Agile Dev — Install Script
-#
 # Usage:
-#   cd /path/to/your-project && bash /path/to/mas/install_mas_agiledev.sh
-#   OR: bash /path/to/mas/install_mas_agiledev.sh /path/to/your-project
-#
-# What it does:
-#   1. <TARGET>/.claude              → <MAS>/.claude           (symlink)
-#   2. <TARGET>/.claude/skills/<SUB> → <MAS>/.agents/skills/<SUB>  (per-skill symlinks)
-#      Force-recreates each skill symlink (removes existing first).
-#
-# This gives the target project access to:
-#   - .claude/settings.json      (Stop hook → log-session.sh)
-#   - .claude/log-session.sh     (full raw JSONL transcript capture)
-#   - .claude/agents/            (SM, ARCH, Dev1-3, QA1, QA2, …)
-#   - .claude/skills/<SUBDIR>/   (one symlink per .agents/skills/ subdirectory)
+#   bash /path/to/mas/install_mas_agiledev.sh [TARGET_DIR]
+#   (TARGET_DIR defaults to current directory)
 
 set -euo pipefail
 
-# ── Resolve paths ─────────────────────────────────────────────────────────────
-# code:tool-install-mas-001:resolve-paths
 MAS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAS_CLAUDE_DIR="${MAS_DIR}/.claude"
-MAS_SKILLS_SRC="${MAS_DIR}/.agents/skills"
 
+# code:tool-install-mas-001:resolve-target
+# Bug fix: mkdir -p so cd never fails on a non-existent TARGET_DIR
 TARGET_DIR="${1:-$(pwd)}"
-TARGET_DIR="$(cd "${TARGET_DIR}" && pwd)"
-TARGET_CLAUDE_LINK="${TARGET_DIR}/.claude"
+mkdir -p "$TARGET_DIR"
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
-echo "MAS Agile Dev — Install"
-echo "========================"
-echo "MAS source : ${MAS_DIR}"
-echo "Target dir : ${TARGET_DIR}"
-echo ""
+echo "MAS: $MAS_DIR"
+echo "Target: $TARGET_DIR"
 
-# ── Guard: same dir ───────────────────────────────────────────────────────────
-# code:tool-install-mas-001:guard-same-dir
-if [ "${TARGET_DIR}" = "${MAS_DIR}" ]; then
-  echo "⚠  Target is the MAS directory itself — nothing to do."
-  exit 0
-fi
+[ "$TARGET_DIR" = "$MAS_DIR" ] && echo "Same dir — nothing to do." && exit 0
 
-# ── Step 1: .claude symlink ───────────────────────────────────────────────────
-# code:tool-install-mas-001:guard-existing
-echo "── Step 1: .claude/ symlink"
-if [ -e "${TARGET_CLAUDE_LINK}" ] || [ -L "${TARGET_CLAUDE_LINK}" ]; then
-  if [ -L "${TARGET_CLAUDE_LINK}" ]; then
-    EXISTING_TARGET="$(readlink "${TARGET_CLAUDE_LINK}")"
-    if [ "${EXISTING_TARGET}" = "${MAS_CLAUDE_DIR}" ]; then
-      echo "  ✓ Already correct: ${TARGET_CLAUDE_LINK} → ${MAS_CLAUDE_DIR}"
-    else
-      echo "  ⚠  Stale symlink detected (→ ${EXISTING_TARGET}), re-linking..."
-      rm "${TARGET_CLAUDE_LINK}"
-      ln -s "${MAS_CLAUDE_DIR}" "${TARGET_CLAUDE_LINK}"
-      echo "  ✓ Symlink updated: ${TARGET_CLAUDE_LINK} → ${MAS_CLAUDE_DIR}"
-    fi
-  else
-    echo "  ❌ ${TARGET_CLAUDE_LINK} exists and is not a symlink."
-    echo "     Please remove or rename it manually, then re-run this script."
-    exit 1
-  fi
+# Step 1: .claude/ must be a real dir (not a symlink)
+CLAUDE="$TARGET_DIR/.claude"
+[ -L "$CLAUDE" ] && rm "$CLAUDE"
+mkdir -p "$CLAUDE"
+
+# Step 2: symlink MAS components into .claude/
+ln -sf "$MAS_DIR/.claude/agents"         "$CLAUDE/agents"
+ln -sf "$MAS_DIR/.claude/settings.json"  "$CLAUDE/settings.json"
+ln -sf "$MAS_DIR/.claude/log-session.sh" "$CLAUDE/log-session.sh"
+echo "Linked: agents/, settings.json, log-session.sh"
+
+# Step 3: .agents/skills/* → .claude/skills/
+# code:tool-install-mas-001:link-skills
+if [ ! -d "$MAS_DIR/.agents/skills" ]; then
+  echo "⚠️  No .agents/skills dir found — skipping skills step."
 else
-  # code:tool-install-mas-001:create-symlink
-  ln -s "${MAS_CLAUDE_DIR}" "${TARGET_CLAUDE_LINK}"
-  echo "  ✓ Created: ${TARGET_CLAUDE_LINK} → ${MAS_CLAUDE_DIR}"
-fi
-echo ""
+  mkdir -p "$CLAUDE/skills"
 
-# ── Step 2: per-skill entries inside .claude/skills/ ─────────────────────────
-# code:tool-install-mas-002:link-skills
-# Rules:
-#   .agents/skills/<SUBDIR> is a real directory → create symlink in .claude/skills/
-#   .agents/skills/<SUBDIR> is a symlink        → cp -r resolved target into .claude/skills/
-# Always runs, even if .claude/ already exists, to verify/update every skill.
-echo "── Step 2: verify/install .claude/skills/<SUBDIR>"
+  # Bug fix: use glob instead of $(ls -1 ...) to handle names with spaces safely
+  for SRC in "$MAS_DIR/.agents/skills"/*/; do
+    # glob yields trailing slash; strip it and get the basename
+    SRC="${SRC%/}"
+    NAME="$(basename "$SRC")"
 
-if [ ! -d "${MAS_SKILLS_SRC}" ]; then
-  echo "  ⚠  No .agents/skills/ directory found in MAS — skipping skill links."
-else
-  SKILLS_DEST="${TARGET_CLAUDE_LINK}/skills"
-  mkdir -p "${SKILLS_DEST}"
+    rm -rf "$CLAUDE/skills/$NAME"
 
-  SKILL_COUNT=0
-  for SKILL_PATH in "${MAS_SKILLS_SRC}"/*/; do
-    [ -e "${SKILL_PATH}" ] || continue          # glob miss — skip
-    SUBDIR="$(basename "${SKILL_PATH%/}")"
-    DEST="${SKILLS_DEST}/${SUBDIR}"
-
-    # Force-remove existing destination (symlink, dir, or file)
-    if [ -L "${DEST}" ]; then
-      rm "${DEST}"
-    elif [ -e "${DEST}" ]; then
-      rm -rf "${DEST}"
-    fi
-
-    if [ -L "${SKILL_PATH%/}" ]; then
-      # ── Source is a symlink → copy the resolved target directory ──────────
-      REAL_SKILL="$(cd "${SKILL_PATH}" && pwd -P)"
-      cp -r "${REAL_SKILL}" "${DEST}"
-      echo "  📋 ${SUBDIR} (symlink→copy)  ← ${REAL_SKILL}"
+    if [ -L "$SRC" ]; then
+      # Bug fix: validate readlink result before using it (handles dangling symlinks)
+      LINK_TARGET="$(readlink "$SRC")"
+      if [ -z "$LINK_TARGET" ]; then
+        echo "  ⚠️  skip dangling symlink: $NAME"
+        continue
+      fi
+      ln -s "$LINK_TARGET" "$CLAUDE/skills/$NAME"   # copy symlink as-is
     else
-      # ── Source is a real directory → create a symlink ─────────────────────
-      REAL_SKILL="$(cd "${SKILL_PATH}" && pwd -P)"
-      ln -s "${REAL_SKILL}" "${DEST}"
-      echo "  🔗 ${SUBDIR} (symlink)       → ${REAL_SKILL}"
+      ln -s "$SRC" "$CLAUDE/skills/$NAME"            # real dir → symlink
     fi
-
-    SKILL_COUNT=$((SKILL_COUNT + 1))
+    echo "  skill: $NAME"
   done
-
-  if [ "${SKILL_COUNT}" -eq 0 ]; then
-    echo "  (no skill subdirectories found in ${MAS_SKILLS_SRC})"
-  else
-    echo "  ${SKILL_COUNT} skill(s) installed."
-  fi
 fi
-echo ""
 
-# ── Summary ───────────────────────────────────────────────────────────────────
-echo "Contents of ${TARGET_CLAUDE_LINK}/:"
-ls -la "${TARGET_CLAUDE_LINK}/"
-echo ""
-echo "Done. Claude Code in '${TARGET_DIR}' will now use MAS agents, hooks, and skills."
+echo "Done."
+ls -la "$CLAUDE/"
