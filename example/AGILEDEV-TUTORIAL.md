@@ -1,9 +1,9 @@
 ---
-id: tutorial:mas:agile-dev-agent-team
-description: Hướng dẫn tổ chức Agile Dev Agent Team bằng Claude Code — đội 7 agent chạy sprint phát triển phần mềm theo mô hình MAS.
+id: tutorial:mas:agile-dev-subagents
+description: Hướng dẫn tổ chức Agile Dev Subagents bằng Claude Code — đội 7 agent chạy sprint phát triển phần mềm theo mô hình MAS.
 ---
 
-# TUTORIAL: Agile Dev Agent Team
+# TUTORIAL: Agile Dev Subagents
 
 > **MAS = Phần mềm (Agile Dev) + Mô phỏng Nghiệp vụ (Org Simulation)**
 >
@@ -80,7 +80,7 @@ Toàn bộ đội dự án vận hành dựa trên **hai nguồn sự thật duy
 │  │  - docs/ là ground truth │    │  - Dev1-3 = Lập trình viên  │ │
 │  └──────────────────────────┘    └─────────────────────────────┘ │
 │                                                                  │
-│  Công cụ: Claude Code + CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1  │
+│  Công cụ: Claude Code + Native Subagents                         │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -195,14 +195,14 @@ Toàn bộ đội dự án vận hành dựa trên **hai nguồn sự thật duy
 
 ## 5. Giao Tiếp Giữa Các Agent
 
-### Model: Agent Team Messaging (Claude Code Native)
+### Model: Subagent Delegation (Claude Code Native)
 
-Mỗi agent là một **process Claude Code riêng biệt**, giao tiếp qua
-messaging — không phải return-value trong cùng session.
+Mỗi agent là một **Subagent**, giao tiếp qua cơ chế
+return-value và prompt trực tiếp từ main session (SM).
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                   AGENT TEAM MESSAGING                          │
+│                   SUBAGENT DELEGATION                           │
 │                                                                │
 │  SM ──broadcast──→ Dev1, Dev2, Dev3:                           │
 │     "Test plan approved. Begin implementation."                │
@@ -226,15 +226,26 @@ messaging — không phải return-value trong cùng session.
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### So Sánh Hai Mô Hình
+### Chiến Lược Tối Ưu Context Window (Zero-Bloat Handoff)
 
-| Tiêu chí | Return-Value (Subagent) | Agent Team Messaging |
-|:---------|:-----------------------|:---------------------|
-| Dùng khi | Delegate subtask, cùng pipeline | Parallel independent work |
-| Process | Cùng Claude Code session | Process riêng biệt |
-| Token cost | Thấp hơn | Cao hơn (mỗi agent = context riêng) |
-| Concurrent | Tuần tự theo chain | Song song thực sự |
-| Phù hợp | Org Simulation runtime | Sprint-level software dev |
+Vì tất cả message trả về từ Subagent đều cộng dồn vào Context Window của SM (Master Orchestrator), nếu Subagent báo cáo quá chi tiết sẽ làm trôi context và tăng token fee nhanh chóng (Context Window Bloat). 
+
+**3 Cốt lõi để triệt tiêu message handover:**
+1. **Filesystem as the Shared Bus**: Mọi dữ liệu lớn (code diffs, test logs, reasoning, bug traces) bắt buộc phải đẩy xuống file cứng (`docs/report/`, `logs/`, `memory/`).
+2. **Zero-Code Return Rule**: Trong prompt của mọi Subagent, nhấn mạnh lệnh: *"DO NOT return code snippets, logs, or long explanations in your final reply. Write to file instead."*
+3. **Brief Progress & Hierarchy**: Tin nhắn vòng lại SM chỉ chứa tiến độ cực ngắn; hãy để subagent tiếp theo (tiếp nhận luồng) vào đọc nội dung chi tiết trong file để điều tra hay xử lý tiếp. Quy trình vận hành theo Hierarchy of Knowledge Base (qua docs/logs), KHÔNG phải qua Hierarchy of Messages. 
+   > *Ví dụ đúng:* "Dev1 xong Task T1. File `src/app.js` đã update. Unit tests PASS."
+   > *Ví dụ sai:* "Dev1 done. Đây là đoạn code đã sửa: {100 dòng code} và log lỗi..."
+
+### Lựa chọn Mô hình Subagent
+
+| Tiêu chí | Return-Value (Subagent) |
+|:---------|:-----------------------|
+| Dùng khi | Delegate subtask, luân chuyển công việc |
+| Process | Cùng Claude Code session |
+| Token cost | Tối ưu hơn, gom chung context gọn nhẹ |
+| Phối hợp | Tuần tự theo chain |
+| Phù hợp | Agile Sprint-level software dev, zero-conflict |
 
 ---
 
@@ -356,7 +367,7 @@ mas/
 │                                                                │
 │  Đọc GEMINI.md + docs/PRD/ → xác định task list               │
 │                   │                                            │
-│  Paste prompt vào Claude Code (AGENT_TEAMS=1)                  │
+│  Chạy /spawn-team để Claude khởi tạo subagents                 │
 │                   │                                            │
 │  SM spawn 6 teammates                                          │
 │    ARCH → architecture-decisions.md                            │
@@ -383,7 +394,7 @@ mas/
 
 > **Tham khảo kỹ thuật:**
 > - Ground truth: [GEMINI.md](../GEMINI.md)
-> - Agent Teams: `.agents/skills/build-with-claude-code/reference/agent-teams.md`
+> - Subagents: `.agents/skills/build-with-claude-code/reference/sub-agents.md`
 > - Agile Dev Brownfield directive: `.agents/skills/build-with-claude-code/agile-agent-team/agile-dev-brown-field.md`
 > - Agent RFT: `.agents/workflows/claudecode-agent-rft.md`
 
