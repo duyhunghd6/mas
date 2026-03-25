@@ -45,8 +45,25 @@ if [ ! -d "$TARGET_DIR/.agents/skills" ]; then
 else
   mkdir -p "$CLAUDE/skills"
 
+  # === 3A. MAS Global Skills ===
+  # Link global skills (like spawn-team) from MAS_DIR/.claude/skills/
+  if [ -d "$MAS_DIR/.claude/skills" ]; then
+    for SRC in "$MAS_DIR/.claude/skills"/*/; do
+      # If no subdirs exist, glob might return the raw string with *; guard against it
+      [ -e "$SRC" ] || continue
+      SRC="${SRC%/}"
+      NAME="$(basename "$SRC")"
+      rm -rf "$CLAUDE/skills/$NAME"
+      ln -s "$SRC" "$CLAUDE/skills/$NAME"
+      echo "  global skill: $NAME"
+    done
+  fi
+
+  # === 3B. Target Local Skills ===
+  # Link target-specific skills from TARGET_DIR/.agents/skills/
   # Glob-based loop (never word-splits on spaces/special chars)
   for SRC in "$TARGET_DIR/.agents/skills"/*/; do
+    [ -e "$SRC" ] || continue
     SRC="${SRC%/}"
     NAME="$(basename "$SRC")"
 

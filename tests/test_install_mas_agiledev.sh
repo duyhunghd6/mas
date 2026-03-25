@@ -58,8 +58,21 @@ assert_symlink "$TARGET/.claude/skills/mock-target-skill" "target skill is symli
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T4: idempotent — second run also exits 0"
-# test-plan:install-mas:t4-idempotent
+echo "T4: MAS global skill linked correctly"
+# test-plan:install-mas:t4-mas-global-skill-linked
+# MAS should have at least 'spawn-team' or 'chat' in .claude/skills/
+GLOBAL_SKILLS=("$SCRIPT_DIR/.claude/skills"/*/)
+if [ ${#GLOBAL_SKILLS[@]} -gt 0 ] && [ -e "${GLOBAL_SKILLS[0]}" ]; then
+  FIRST_GLOBAL="$(basename "${GLOBAL_SKILLS[0]}")"
+  assert_symlink "$TARGET/.claude/skills/$FIRST_GLOBAL" "MAS global skill ($FIRST_GLOBAL) is symlink"
+else
+  pass "skip: no MAS global skills found to test"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "T5: idempotent — second run also exits 0"
+# test-plan:install-mas:t5-idempotent
 bash "$INSTALL_SCRIPT" "$TARGET" > /tmp/mas_t4.log 2>&1
 STATUS=$?
 [ "$STATUS" -eq 0 ] && pass "second run exits 0" || fail "second run crashed with status $STATUS (see /tmp/mas_t4.log)"
@@ -67,14 +80,14 @@ assert_symlink "$TARGET/.claude/settings.json" "settings.json still a symlink af
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T5: no double-nesting (.claude/agents/agents must NOT exist)"
-# test-plan:install-mas:t5-no-double-nesting
+echo "T6: no double-nesting (.claude/agents/agents must NOT exist)"
+# test-plan:install-mas:t6-no-double-nesting
 assert_not_exist "$TARGET/.claude/agents/agents" "no .claude/agents/agents nesting"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T6: same-dir no-op"
-# test-plan:install-mas:t6-same-dir-noop
+echo "T7: same-dir no-op"
+# test-plan:install-mas:t7-same-dir-noop
 OUTPUT="$(bash "$INSTALL_SCRIPT" "$SCRIPT_DIR" 2>&1)"
 echo "$OUTPUT" | grep -q "Same dir — nothing to do." && pass "same-dir no-op message printed" || fail "no-op message not found"
 
