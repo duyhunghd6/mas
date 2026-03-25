@@ -28,7 +28,7 @@ Ask the user (or extract from context) the following:
 | Sprint scope (one sentence) | User describes the feature/fix goal |
 | Task list (T1, T2, T3) | From `sprint-backlog.md` |
 | Dependency graph | From `sprint-backlog.md` (which tasks block which) |
-| Model name | User specifies (e.g. `sonnet`, `opus`, `claude-sonnet-4-5`) |
+| Model name | Default: `gpt-5.4` (override if needed) |
 
 ---
 
@@ -58,11 +58,11 @@ Follow the format from `.agents/skills/build-with-claude-code/agile-agent-team/a
 Fill in all `[PLACEHOLDERS]` with real values extracted in Steps 1–2.
 
 ```
-Create an agent team with 7 teammates using model [MODEL] to run Sprint [N]: [SPRINT SCOPE].
+Create an agent team with 7 teammates using model gpt-5.4 to run Sprint [N]: [SPRINT SCOPE].
 
 Prerequisites:
 - CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 must be set in .claude/settings.json
-- model: [MODEL]
+- model: gpt-5.4
 
 Sprint context (read before spawning):
 - docs/PRD/sprint-[N]/sprint-backlog.md — task list and story points
@@ -143,7 +143,7 @@ Verify every placeholder is filled — no `[BRACKETS]` remain in the output:
 
 | Check | Must be YES |
 |:------|:------------|
-| Model name is specified (not `[MODEL]`) | YES |
+| Model name is specified (`gpt-5.4` or explicit override) | YES |
 | Sprint N is filled | YES |
 | T1/T2/T3 descriptions are real tasks from the PRD | YES |
 | File lists for each Dev come from the PRD/source | YES |
