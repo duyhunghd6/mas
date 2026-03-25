@@ -6,12 +6,14 @@
 # Run: bash tests/test_install_mas_agiledev.sh
 #
 # Universal IDs:
-#   test-plan:install-mas:t1-nonexistent-target
-#   test-plan:install-mas:t2-symlinks-created
-#   test-plan:install-mas:t3-real-skill-linked
-#   test-plan:install-mas:t4-chained-symlink-skill
-#   test-plan:install-mas:t5-idempotent
-#   test-plan:install-mas:t6-same-dir-noop
+#   test-plan:install-mas:t1-preferred-symlink
+#   test-plan:install-mas:t2-preferred-resolves
+#   test-plan:install-mas:t3-no-double-nesting
+#   test-plan:install-mas:t4-idempotent-preferred
+#   test-plan:install-mas:t5-fallback-real-dir
+#   test-plan:install-mas:t6-fallback-components
+#   test-plan:install-mas:t7-fallback-no-nesting
+#   test-plan:install-mas:t8-same-dir-noop
 
 set -uo pipefail
 
@@ -24,67 +26,81 @@ pass() { echo "  ✅ PASS: $1"; PASS=$((PASS+1)); }
 fail() { echo "  ❌ FAIL: $1"; FAIL=$((FAIL+1)); }
 
 assert_symlink() { [ -L "$1" ] && pass "$2" || fail "$2 — expected symlink at $1"; }
-assert_exit0()   { "$@" && pass "exit 0" || fail "expected exit 0, got $?"; }
+assert_not_exist() { [ ! -e "$1" ] && pass "$2" || fail "$2 — expected $1 to NOT exist"; }
 
-# Fresh temp target used across tests
 TARGET="/tmp/mas_install_test_$$"
 trap 'rm -rf "$TARGET"' EXIT
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ═══════════════════════════ PREFERRED PATH TESTS ════════════════════════════
+
 echo ""
-echo "T1: target dir does not exist yet (mkdir-p guard)"
-# test-plan:install-mas:t1-nonexistent-target
+echo "── PREFERRED PATH: .claude/ does not exist yet ──────────────────────────"
+
+echo ""
+echo "T1: .claude/ is created as a symlink (preferred)"
+# test-plan:install-mas:t1-preferred-symlink
 rm -rf "$TARGET"
 bash "$INSTALL_SCRIPT" "$TARGET" > /tmp/mas_t1.log 2>&1
 STATUS=$?
-[ "$STATUS" -eq 0 ] && pass "exit 0 on non-existent target" || fail "script crashed with status $STATUS (see /tmp/mas_t1.log)"
-[ -d "$TARGET/.claude" ] && pass ".claude/ dir created" || fail ".claude/ dir not created"
+[ "$STATUS" -eq 0 ] && pass "exit 0" || fail "crashed — see /tmp/mas_t1.log"
+assert_symlink "$TARGET/.claude" ".claude/ itself is a symlink"
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T2: core symlinks created"
-# test-plan:install-mas:t2-symlinks-created
-assert_symlink "$TARGET/.claude/agents"         ".claude/agents is a symlink"
-assert_symlink "$TARGET/.claude/settings.json"  ".claude/settings.json is a symlink"
-assert_symlink "$TARGET/.claude/log-session.sh" ".claude/log-session.sh is a symlink"
+echo "T2: symlink resolves to MAS .claude/"
+# test-plan:install-mas:t2-preferred-resolves
+DEST="$(readlink "$TARGET/.claude")"
+[ "$DEST" = "$SCRIPT_DIR/.claude" ] && pass ".claude/ → correct MAS .claude/" || fail ".claude/ points to '$DEST', expected '$SCRIPT_DIR/.claude'"
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T3: draw-ascii-diagrams (real dir) linked as symlink"
-# test-plan:install-mas:t3-real-skill-linked
-assert_symlink "$TARGET/.claude/skills/draw-ascii-diagrams" "draw-ascii-diagrams skill is symlink"
+echo "T3: no double-nesting (.claude/agents/agents must NOT exist)"
+# test-plan:install-mas:t3-no-double-nesting
+assert_not_exist "$TARGET/.claude/agents/agents" "no .claude/agents/agents nesting"
 
-# ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo "T4: build-with-claude-code (chained symlink) linked correctly"
-# test-plan:install-mas:t4-chained-symlink-skill
-assert_symlink "$TARGET/.claude/skills/build-with-claude-code" "build-with-claude-code skill is symlink"
-
-# ─────────────────────────────────────────────────────────────────────────────
-echo ""
-echo "T5: idempotent — second run also exits 0"
-# test-plan:install-mas:t5-idempotent
-bash "$INSTALL_SCRIPT" "$TARGET" > /tmp/mas_t5.log 2>&1
+echo "T4: idempotent — second run keeps .claude/ as a symlink"
+# test-plan:install-mas:t4-idempotent-preferred
+bash "$INSTALL_SCRIPT" "$TARGET" > /tmp/mas_t4.log 2>&1
 STATUS=$?
-[ "$STATUS" -eq 0 ] && pass "second run exits 0" || fail "second run crashed with status $STATUS (see /tmp/mas_t5.log)"
-assert_symlink "$TARGET/.claude/settings.json" "settings.json still a symlink after second run"
+[ "$STATUS" -eq 0 ] && pass "second run exits 0" || fail "second run crashed — see /tmp/mas_t4.log"
+assert_symlink "$TARGET/.claude" ".claude/ still a symlink after second run"
+
+# ════════════════════════════ FALLBACK PATH TESTS ════════════════════════════
+
+echo ""
+echo "── FALLBACK PATH: .claude/ exists as a real directory ───────────────────"
+
+echo ""
+echo "T5: individual components linked when .claude/ is a real dir"
+# test-plan:install-mas:t5-fallback-real-dir
+FALLBACK="/tmp/mas_fallback_test_$$"
+trap 'rm -rf "$TARGET" "$FALLBACK"' EXIT
+mkdir -p "$FALLBACK/.claude"   # real dir — triggers fallback
+bash "$INSTALL_SCRIPT" "$FALLBACK" > /tmp/mas_t5.log 2>&1
+STATUS=$?
+[ "$STATUS" -eq 0 ] && pass "fallback exits 0" || fail "fallback crashed — see /tmp/mas_t5.log"
+
+echo ""
+echo "T6: fallback core symlinks created inside real .claude/"
+# test-plan:install-mas:t6-fallback-components
+assert_symlink "$FALLBACK/.claude/agents"         ".claude/agents is a symlink"
+assert_symlink "$FALLBACK/.claude/settings.json"  ".claude/settings.json is a symlink"
+assert_symlink "$FALLBACK/.claude/log-session.sh" ".claude/log-session.sh is a symlink"
+
+echo ""
+echo "T7: fallback — no double-nesting"
+# test-plan:install-mas:t7-fallback-no-nesting
+assert_not_exist "$FALLBACK/.claude/agents/agents" "no .claude/agents/agents in fallback"
 
 # ─────────────────────────────────────────────────────────────────────────────
+
 echo ""
-echo "T6: same-dir no-op"
-# test-plan:install-mas:t6-same-dir-noop
+echo "T8: same-dir no-op"
+# test-plan:install-mas:t8-same-dir-noop
 OUTPUT="$(bash "$INSTALL_SCRIPT" "$SCRIPT_DIR" 2>&1)"
 echo "$OUTPUT" | grep -q "Same dir — nothing to do." && pass "same-dir no-op message printed" || fail "no-op message not found"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-# ─────────────────────────────────────────────────────────────────────────────
-echo ""
-echo "T7: no double-nesting (.claude/agents/agents must NOT exist)"
-# test-plan:install-mas:t7-no-double-nesting
-# Regression: ln -sf on existing dir appends inside it; rm -f before ln -s fixes this.
-[ ! -e "$TARGET/.claude/agents/agents" ] && pass "no .claude/agents/agents double-nesting" || fail ".claude/agents/agents exists — symlink inside symlink bug!"
-
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 TOTAL=$((PASS+FAIL))
 if [ "$FAIL" -eq 0 ]; then
