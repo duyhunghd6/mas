@@ -21,60 +21,51 @@ echo "Target: $TARGET_DIR"
 
 [ "$TARGET_DIR" = "$MAS_DIR" ] && echo "Same dir — nothing to do." && exit 0
 
+# Step 1: .claude/ must be a real dir (not a symlink)
+# We cannot symlink the whole .claude/ dir because we need to mix global MAS
+# agents with local TARGET-specific skills.
 CLAUDE="$TARGET_DIR/.claude"
+[ -L "$CLAUDE" ] && rm "$CLAUDE"
+mkdir -p "$CLAUDE"
 
-# code:tool-install-mas-001:link-strategy
-# Preferred path: .claude/ does not exist or is already a symlink.
-# → Symlink the entire .claude/ dir in one atomic step.
-#   This avoids any risk of nested symlinks (e.g. .claude/agents/agents).
-#
-# Fallback path: .claude/ exists as a real directory (project already has its own).
-# → Link individual MAS components inside it, preserving the project's own files.
+# Step 2: symlink MAS components into .claude/
+# rm -f before ln -s: ln -sf on an existing *directory* appends inside
+# it instead of replacing it, causing nested symlinks.
+rm -f "$CLAUDE/agents" "$CLAUDE/settings.json" "$CLAUDE/log-session.sh"
+ln -s "$MAS_DIR/.claude/agents"         "$CLAUDE/agents"
+ln -s "$MAS_DIR/.claude/settings.json"  "$CLAUDE/settings.json"
+ln -s "$MAS_DIR/.claude/log-session.sh" "$CLAUDE/log-session.sh"
+echo "Linked: agents/, settings.json, log-session.sh"
 
-if [ ! -e "$CLAUDE" ] || [ -L "$CLAUDE" ]; then
-  # ── PREFERRED: single symlink for the whole .claude/ ─────────────────────
-  rm -f "$CLAUDE"
-  ln -s "$MAS_DIR/.claude" "$CLAUDE"
-  echo "Linked: .claude/ → $MAS_DIR/.claude (preferred)"
-
+# Step 3: TARGET_DIR/.agents/skills/* → TARGET_DIR/.claude/skills/
+# code:tool-install-mas-001:link-skills
+# (Skills are local to the target project, NOT global to the MAS dir)
+if [ ! -d "$TARGET_DIR/.agents/skills" ]; then
+  echo "⚠️  No .agents/skills dir found in target ($TARGET_DIR) — skipping skills step."
 else
-  # ── FALLBACK: .claude/ is a real dir — link components individually ───────
-  echo "Note: .claude/ exists as a real dir — linking MAS components inside it"
+  mkdir -p "$CLAUDE/skills"
 
-  # rm -f before ln -s: ln -sf on an existing *directory* appends inside
-  # it instead of replacing it, causing nested symlinks.
-  rm -f "$CLAUDE/agents" "$CLAUDE/settings.json" "$CLAUDE/log-session.sh"
-  ln -s "$MAS_DIR/.claude/agents"         "$CLAUDE/agents"
-  ln -s "$MAS_DIR/.claude/settings.json"  "$CLAUDE/settings.json"
-  ln -s "$MAS_DIR/.claude/log-session.sh" "$CLAUDE/log-session.sh"
-  echo "Linked: agents/, settings.json, log-session.sh"
+  # Glob-based loop (never word-splits on spaces/special chars)
+  for SRC in "$TARGET_DIR/.agents/skills"/*/; do
+    SRC="${SRC%/}"
+    NAME="$(basename "$SRC")"
 
-  # code:tool-install-mas-001:link-skills
-  if [ ! -d "$MAS_DIR/.agents/skills" ]; then
-    echo "⚠️  No .agents/skills dir found — skipping skills step."
-  else
-    mkdir -p "$CLAUDE/skills"
+    # Prefer create symlink: if target already exists, delete it first
+    rm -rf "$CLAUDE/skills/$NAME"
 
-    # Glob-based loop (never word-splits on spaces/special chars)
-    for SRC in "$MAS_DIR/.agents/skills"/*/; do
-      SRC="${SRC%/}"
-      NAME="$(basename "$SRC")"
-      rm -rf "$CLAUDE/skills/$NAME"
-
-      if [ -L "$SRC" ]; then
-        # Validate readlink — skip dangling symlinks
-        LINK_TARGET="$(readlink "$SRC")"
-        if [ -z "$LINK_TARGET" ]; then
-          echo "  ⚠️  skip dangling symlink: $NAME"
-          continue
-        fi
-        ln -s "$LINK_TARGET" "$CLAUDE/skills/$NAME"   # copy symlink as-is
-      else
-        ln -s "$SRC" "$CLAUDE/skills/$NAME"            # real dir → symlink
+    if [ -L "$SRC" ]; then
+      # Validate readlink — skip dangling symlinks
+      LINK_TARGET="$(readlink "$SRC")"
+      if [ -z "$LINK_TARGET" ]; then
+        echo "  ⚠️  skip dangling symlink: $NAME"
+        continue
       fi
-      echo "  skill: $NAME"
-    done
-  fi
+      ln -s "$LINK_TARGET" "$CLAUDE/skills/$NAME"   # copy symlink as-is
+    else
+      ln -s "$SRC" "$CLAUDE/skills/$NAME"            # real dir → symlink
+    fi
+    echo "  skill: $NAME"
+  done
 fi
 
 echo "Done."
