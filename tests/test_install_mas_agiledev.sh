@@ -78,6 +78,13 @@ echo "$OUTPUT" | grep -q "Same dir — nothing to do." && pass "same-dir no-op m
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
+# ─────────────────────────────────────────────────────────────────────────────
+echo ""
+echo "T7: no double-nesting (.claude/agents/agents must NOT exist)"
+# test-plan:install-mas:t7-no-double-nesting
+# Regression: ln -sf on existing dir appends inside it; rm -f before ln -s fixes this.
+[ ! -e "$TARGET/.claude/agents/agents" ] && pass "no .claude/agents/agents double-nesting" || fail ".claude/agents/agents exists — symlink inside symlink bug!"
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 TOTAL=$((PASS+FAIL))
 if [ "$FAIL" -eq 0 ]; then

@@ -27,9 +27,12 @@ CLAUDE="$TARGET_DIR/.claude"
 mkdir -p "$CLAUDE"
 
 # Step 2: symlink MAS components into .claude/
-ln -sf "$MAS_DIR/.claude/agents"         "$CLAUDE/agents"
-ln -sf "$MAS_DIR/.claude/settings.json"  "$CLAUDE/settings.json"
-ln -sf "$MAS_DIR/.claude/log-session.sh" "$CLAUDE/log-session.sh"
+# Use rm -f first: ln -sf on an existing *directory* appends inside it
+# instead of replacing it (causing e.g. .claude/agents/agents).
+rm -f "$CLAUDE/agents" "$CLAUDE/settings.json" "$CLAUDE/log-session.sh"
+ln -s "$MAS_DIR/.claude/agents"         "$CLAUDE/agents"
+ln -s "$MAS_DIR/.claude/settings.json"  "$CLAUDE/settings.json"
+ln -s "$MAS_DIR/.claude/log-session.sh" "$CLAUDE/log-session.sh"
 echo "Linked: agents/, settings.json, log-session.sh"
 
 # Step 3: .agents/skills/* → .claude/skills/
